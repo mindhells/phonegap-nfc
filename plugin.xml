@@ -36,6 +36,10 @@
             <uses-feature android:name="android.hardware.nfc" android:required="false"/>
         </config-file>
 
+        <framework src="src/android/repos.gradle" custom="true" type="gradleReference" />
+
+        <resource-file src="dniedroid.aar" target="libs/dniedroid.aar" />
+
     </platform>
 
     <platform name="wp8">
