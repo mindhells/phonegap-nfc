@@ -1,6 +1,9 @@
 package com.chariotsolutions.nfc.plugin;
 
 import java.io.IOException;
+import java.security.Key;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -28,10 +31,31 @@ import android.nfc.Tag;
 import android.nfc.TagLostException;
 import android.nfc.tech.Ndef;
 import android.nfc.tech.NdefFormatable;
+import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Log;
 
-public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCompleteCallback {
+
+import java.security.KeyStoreSpi;
+import java.security.Security;
+import de.tsenger.androsmex.data.CANSpecDO;
+import de.tsenger.androsmex.data.CANSpecDOStore;
+import de.tsenger.androsmex.mrtd.DG11;
+import de.tsenger.androsmex.mrtd.DG1_Dnie;
+import de.tsenger.androsmex.mrtd.DG2;
+import de.tsenger.androsmex.mrtd.DG7;
+import de.tsenger.androsmex.mrtd.EF_COM;
+import de.tsenger.androsmex.pace.PaceException;
+import es.gob.jmulticard.card.dnie.FakeX509Certificate;
+import es.gob.jmulticard.jse.provider.DnieKeyStore;
+import es.gob.jmulticard.jse.provider.DnieProvider;
+import es.gob.jmulticard.jse.provider.MrtdKeyStoreImpl;
+
+import es.gob.jmulticard.jse.provider.MrtdPrivateKey;
+import es.gob.jmulticard.jse.smartcardio.SmartCardMRTDConnection;
+import es.gob.jmulticard.ui.passwordcallback.DNIeDialogManager;
+
+public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCompleteCallback, NfcAdapter.ReaderCallback {
     private static final String REGISTER_MIME_TYPE = "registerMimeType";
     private static final String REMOVE_MIME_TYPE = "removeMimeType";
     private static final String REGISTER_NDEF = "registerNdef";
@@ -89,6 +113,29 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             return true; // short circuit
         }
 
+        NfcAdapter nfcAdapter = NfcAdapter.getDefaultAdapter(getActivity());
+
+        if (action.equalsIgnoreCase(INIT)) {
+            //init(callbackContext);
+            nfcAdapter.setNdefPushMessage(null, getActivity());
+            nfcAdapter.setNdefPushMessageCallback(null, getActivity());
+        }
+
+        if (action.equals(REGISTER_DEFAULT_TAG)) {
+            Bundle options = new Bundle();
+            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 35000);
+            nfcAdapter.enableReaderMode(
+                    getActivity(),
+                    this,
+                    NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+                    options);
+            callbackContext.success();
+        }  else if (action.equals(REMOVE_DEFAULT_TAG)) {
+            nfcAdapter.disableReaderMode(getActivity());
+            callbackContext.success();
+        }
+
+        /*
         createPendingIntent();
 
         if (action.equalsIgnoreCase(REGISTER_MIME_TYPE)) {
@@ -145,6 +192,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             // invalid action
             return false;
         }
+        */
 
         return true;
     }
@@ -761,6 +809,65 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             result.setKeepCallback(true);
             shareTagCallback.sendPluginResult(result);
         }
+
+    }
+
+    private static final String AUTH_CERT_ALIAS = "CertAutenticacion"; //$NON-NLS-1$
+
+    @Override
+    public void onTagDiscovered(Tag tag) {
+        System.setProperty("es.gob.jmulticard.fastmode", "true");
+
+        CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
+        CANSpecDO canDnie = new CANSpecDO("242880", "", "");
+        cansDO.delete(canDnie);
+        canDnie = new CANSpecDO("242880", "", "");
+        cansDO.save(canDnie);
+
+        final DnieProvider p = new DnieProvider();
+        p.setProviderTag(tag);
+        p.setProviderCan(canDnie.getCanNumber());
+        Security.insertProviderAt(p, 1);
+
+        String certSubject;
+
+        //KeyStoreSpi ksSpi = new MrtdKeyStoreImpl();
+        //DnieKeyStore m_ksUserMrtd = new DnieKeyStore(ksSpi, p, "MRTD");
+        try {
+            //m_ksUserMrtd.load(null, null);
+
+            KeyStore m_ksUserDNIe = KeyStore.getInstance("MRTD");
+            m_ksUserDNIe.load(null, null);
+            certSubject = ((FakeX509Certificate) m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS)).getSubjectDN().toString();
+            MrtdPrivateKey key = (MrtdPrivateKey) m_ksUserDNIe.getKey(AUTH_CERT_ALIAS, "73547354".toCharArray());
+            byte[] enckey = key.getEncoded();
+            //Certificate cert = m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS);
+            //byte[] encoded = cert.getEncoded();
+          /*
+
+            DG1_Dnie dg1 = m_ksUserMrtd.getDatagroup1();
+            DG2 m_dg2 = m_ksUserMrtd.getDatagroup2();
+            DG7 m_dg7 = m_ksUserMrtd.getDatagroup7();
+            DG11 m_dg11 = m_ksUserMrtd.getDatagroup11();
+            EF_COM m_efcom = m_ksUserMrtd.getEFCOM();
+            byte[] tagList = m_efcom.getTagList();
+            */
+        } catch (Exception e) {
+
+            if (e.getMessage() != null) {
+                if (e.getMessage().contains("CAN incorrecto")) {
+
+                }
+
+                if (e.getMessage().contains("Tag was lost")) {
+
+                }
+
+            }
+
+
+        }
+
 
     }
 }
