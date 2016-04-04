@@ -27,6 +27,7 @@ function handleNfcFromIntentFilter() {
     }
 }
 
+//document.addEventListener('deviceready', handleNfcFromIntentFilter, false);
 
 var ndef = {
 
@@ -410,6 +411,10 @@ var ndef = {
 
 // nfc provides javascript wrappers to the native phonegap implementation
 var nfc = {
+
+    initialize: function(win, fail){
+        cordova.exec(win, fail, "NfcPlugin", "init", []);
+    },
 
     addTagDiscoveredListener: function (callback, win, fail) {
         document.addEventListener("tag", callback, false);
