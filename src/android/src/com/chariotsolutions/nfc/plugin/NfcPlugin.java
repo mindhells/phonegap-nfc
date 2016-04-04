@@ -119,6 +119,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             //init(callbackContext);
             nfcAdapter.setNdefPushMessage(null, getActivity());
             nfcAdapter.setNdefPushMessageCallback(null, getActivity());
+            callbackContext.success();
         }
 
         if (action.equals(REGISTER_DEFAULT_TAG)) {
@@ -867,6 +868,17 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
 
 
         }
+
+
+        final Tag the_tag = tag;
+        webView.getView().post(new Runnable() {
+            @Override
+            public void run() {
+
+                String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, Util.tagToJSON(the_tag));
+                webView.loadUrl("javascript:" + command);
+            }
+        });
 
 
     }
