@@ -428,9 +428,9 @@ var nfc = {
         cordova.exec(win, fail, "NfcPlugin", "init", []);
     },
 
-    addTagDiscoveredListener: function (callback, win, fail) {
+    addTagDiscoveredListener: function (can, callback, win, fail) {
         document.addEventListener("tag", callback, false);
-        cordova.exec(win, fail, "NfcPlugin", "registerTag", []);
+        cordova.exec(win, fail, "NfcPlugin", "registerTag", [can]);
     },
 
     addMimeTypeListener: function (mimeType, callback, win, fail) {

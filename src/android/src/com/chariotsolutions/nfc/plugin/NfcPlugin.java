@@ -1,5 +1,6 @@
 package com.chariotsolutions.nfc.plugin;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.Key;
 import java.security.KeyStore;
@@ -34,8 +35,8 @@ import android.nfc.tech.Ndef;
 import android.nfc.tech.NdefFormatable;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.util.Base64;
 import android.util.Log;
-
 
 import es.gob.jmulticard.jse.provider.MrtdKeyStoreImpl;
 
@@ -110,6 +111,8 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
     private CallbackContext shareTagCallback;
     private CallbackContext handoverCallback;
 
+    private CANSpecDO selectedCan;
+
     @Override
     public boolean execute(String action, JSONArray data, CallbackContext callbackContext) throws JSONException {
 
@@ -137,6 +140,18 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         }
 
         if (action.equals(REGISTER_DEFAULT_TAG)) {
+            selectedCan = null;
+            String newCode = data.getString(0);
+            CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
+            Vector<CANSpecDO> cans = cansDO.getAll();
+            for (CANSpecDO can: cans){
+                if (can.getCanNumber().equals(newCode)){
+                    selectedCan = can;
+                    break;
+                }
+            }
+            if (selectedCan == null)
+                selectedCan = new CANSpecDO(newCode, "", "");
             Bundle options = new Bundle();
             options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 600000); //10 minutes
             nfcAdapter.enableReaderMode(
@@ -864,73 +879,109 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         System.setProperty("es.gob.jmulticard.fastmode", "true");
 
         CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
-        CANSpecDO canDnie = new CANSpecDO("242880", "", "");
-        cansDO.delete(canDnie);
-        canDnie = new CANSpecDO("242880", "", "");
-        cansDO.save(canDnie);
 
         final DnieProvider p = new DnieProvider();
         p.setProviderTag(tag);
-        p.setProviderCan(canDnie.getCanNumber());
+        p.setProviderCan(selectedCan.getCanNumber());
         Security.insertProviderAt(p, 1);
 
-        Provider[] prov = Security.getProviders();
 
-        String certSubject;
+        KeyStoreSpi ksSpi = new MrtdKeyStoreImpl();
+        DnieKeyStore m_ksUserMrtd = new DnieKeyStore(ksSpi, p, "MRTD");
 
-        //KeyStoreSpi ksSpi = new MrtdKeyStoreImpl();
-        //DnieKeyStore m_ksUserMrtd = new DnieKeyStore(ksSpi, p, "MRTD");
         try {
-            //m_ksUserMrtd.load(null, null);
-
-            KeyStore m_ksUserDNIe = KeyStore.getInstance("MRTD");
-            m_ksUserDNIe.load(null, null);
-            //certSubject = ((FakeX509Certificate) m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS)).getSubjectDN().toString();
-            //MrtdPrivateKey key = (MrtdPrivateKey) m_ksUserDNIe.getKey(AUTH_CERT_ALIAS, "73547354".toCharArray());
-            //byte[] enckey = key.getEncoded();
-
-            KeyManagerFactory kmf = KeyManagerFactory.getInstance("X509");
-            kmf.init(m_ksUserDNIe,"73547354".toCharArray());
-            KeyManager[] keyManagers = kmf.getKeyManagers();
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(keyManagers, null, null);
-
-            //Certificate cert = m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS);
-            //byte[] encoded = cert.getEncoded();
-          /*
-
-            DG1_Dnie dg1 = m_ksUserMrtd.getDatagroup1();
-            DG2 m_dg2 = m_ksUserMrtd.getDatagroup2();
-            DG7 m_dg7 = m_ksUserMrtd.getDatagroup7();
-            DG11 m_dg11 = m_ksUserMrtd.getDatagroup11();
+            m_ksUserMrtd.load(null, null);
+            DG1_Dnie m_dg1 = null; //datos
+            DG2 m_dg2 = null; //foto
+            DG7 m_dg7 = null; //firma
+            DG11 m_dg11 = null; //datos extendidos
             EF_COM m_efcom = m_ksUserMrtd.getEFCOM();
             byte[] tagList = m_efcom.getTagList();
-            */
+            for(int idx=0;idx<tagList.length;idx++) {
+                switch (tagList[idx]){
+                    case 0x61:
+                        m_dg1 = m_ksUserMrtd.getDatagroup1();
+                        break;
+                    case 0x75:
+                        m_dg2 = m_ksUserMrtd.getDatagroup2();
+                        break;
+                    case 0x67:
+                        m_dg7 = m_ksUserMrtd.getDatagroup7();
+                        break;
+                    case 0x6B:
+                        m_dg11 = m_ksUserMrtd.getDatagroup11();
+                        break;
+                }
+            }
+
+
+            final JSONObject json = new JSONObject();
+            if (m_dg1 != null){
+                json.put("name", m_dg1.getName());
+                json.put("surname", m_dg1.getSurname());
+                json.put("id", m_dg1.getDocNumber());
+                json.put("type", m_dg1.getDocType());
+                json.put("sex", m_dg1.getSex());
+                json.put("birth", m_dg1.getDateOfBirth());
+                json.put("nation", m_dg1.getNationality());
+                json.put("opt", m_dg1.getOptData());
+                json.put("expiry", m_dg1.getDateOfExpiry());
+                json.put("issuer", m_dg1.getIssuer());
+            }
+            if (m_dg11 != null){
+                json.put("m11_id", m_dg11.getPersonalNumber());
+                //json.put("m11_birth", m_dg11.getDateOfBirth()); raises an error
+                //json.put("m11_name", m_dg11.getName());
+                //json.put("m11_icao", m_dg11.getIcaoName());
+                json.put("m11_address", m_dg11.getAddress(0));
+                //json.put("m11_address1", m_dg11.getAddress(1));
+                //json.put("m11_address2", m_dg11.getAddress(2));
+                //json.put("m11_address3", m_dg11.getAddress(3));
+                json.put("m11_brith_place", m_dg11.getBirthPlace());
+                //json.put("m11_brith", m_dg11.getDateOfBirth()); raises an error
+                //json.put("m11_brith2", m_dg11.getBirthDate());
+                //json.put("m11_title", m_dg11.getTitle());
+                //json.put("m11_summary", m_dg11.getSummary());
+                //json.put("m11_profession", m_dg11.getProfession());
+                //json.put("m11_custody", m_dg11.getCustodyInfo());
+                //json.put("m11_other", m_dg11.getOtherInfo());
+                //json.put("m11_phone", m_dg11.getPhone());
+            }
+
+            //todo: update CanDO
+
+
+            webView.getView().post(new Runnable() {
+                @Override
+                public void run() {
+
+                    String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, json);
+                    webView.loadUrl("javascript:" + command);
+                }
+            });
+
+
         } catch (Exception e) {
 
-            if (e.getMessage() != null) {
-                if (e.getMessage().contains("CAN incorrecto")) {
+            final JSONObject ejson = new JSONObject();
+            try{
+                ejson.put("error", "Error al leer los datos de la tarjeta");
+            }catch (Exception se){}
 
+            webView.getView().post(new Runnable() {
+                @Override
+                public void run() {
+
+                    String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, ejson);
+                    webView.loadUrl("javascript:" + command);
                 }
+            });
 
-                if (e.getMessage().contains("Tag was lost")) {
-
-                }
-
-            }
         }
 
 
-        final Tag the_tag = tag;
-        webView.getView().post(new Runnable() {
-            @Override
-            public void run() {
-
-                String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, Util.tagToJSON(the_tag));
-                webView.loadUrl("javascript:" + command);
-            }
-        });
-
 
     }
+
+
 }
