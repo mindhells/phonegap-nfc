@@ -31,6 +31,13 @@
         <source-file src="src/android/src/com/chariotsolutions/nfc/plugin/Util.java"
             target-dir="src/com/chariotsolutions/nfc/plugin"/>
 
+        <source-file src="src/android/src/com/dnielectura/jj2000/ImgStreamWriter.java"
+            target-dir="src/com/dnielectura/jj2000"/>
+        <source-file src="src/android/src/com/dnielectura/jj2000/J2kStreamDecoder.java"
+            target-dir="src/com/dnielectura/jj2000"/>
+        <source-file src="src/android/src/com/dnielectura/jj2000/MyFileFormatReader.java"
+            target-dir="src/com/dnielectura/jj2000"/>
+
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.NFC"/>
             <uses-feature android:name="android.hardware.nfc" android:required="false"/>
@@ -39,6 +46,8 @@
         <framework src="src/android/repos.gradle" custom="true" type="gradleReference" />
 
         <resource-file src="dniedroid.aar" target="libs/dniedroid.aar" />
+
+        <lib-file src="jpeg2000.jar" />
 
     </platform>
 

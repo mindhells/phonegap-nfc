@@ -1,6 +1,7 @@
 package com.chariotsolutions.nfc.plugin;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.Key;
 import java.security.KeyStore;
@@ -23,6 +24,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentFilter.MalformedMimeTypeException;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.nfc.FormatException;
 import android.nfc.NdefMessage;
@@ -37,6 +39,8 @@ import android.os.Bundle;
 import android.os.Parcelable;
 import android.util.Base64;
 import android.util.Log;
+
+import com.dnielectura.jj2000.J2kStreamDecoder;
 
 import es.gob.jmulticard.jse.provider.MrtdKeyStoreImpl;
 
@@ -153,7 +157,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             if (selectedCan == null)
                 selectedCan = new CANSpecDO(newCode, "", "");
             Bundle options = new Bundle();
-            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 600000); //10 minutes
+            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 10000); //10 seconds
             nfcAdapter.enableReaderMode(
                     getActivity(),
                     this,
@@ -949,7 +953,31 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             }
 
             //todo: update CanDO
+            if (m_dg2 != null){
+                byte [] imagen = m_dg2.getImageBytes();
+                J2kStreamDecoder j2k = new J2kStreamDecoder();
+                ByteArrayInputStream bis = new ByteArrayInputStream(imagen);
+                Bitmap loadedImage = j2k.decode(bis);
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                loadedImage.compress(Bitmap.CompressFormat.PNG, 50, byteArrayOutputStream);
+                byte[] byteArray = byteArrayOutputStream .toByteArray();
+                String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
 
+                json.put("photo", "data:image/png;base64," + encoded);
+            }
+
+            if (m_dg7 != null){
+                byte [] imagen = m_dg7.getImageBytes();
+                J2kStreamDecoder j2k = new J2kStreamDecoder();
+                ByteArrayInputStream bis = new ByteArrayInputStream(imagen);
+                Bitmap loadedImage = j2k.decode(bis);
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                loadedImage.compress(Bitmap.CompressFormat.PNG, 50, byteArrayOutputStream);
+                byte[] byteArray = byteArrayOutputStream .toByteArray();
+                String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+                json.put("signature", "data:image/png;base64," + encoded);
+            }
 
             webView.getView().post(new Runnable() {
                 @Override
