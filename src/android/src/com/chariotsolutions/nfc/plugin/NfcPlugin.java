@@ -156,16 +156,10 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             }
             if (selectedCan == null)
                 selectedCan = new CANSpecDO(newCode, "", "");
-            Bundle options = new Bundle();
-            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 10000); //10 seconds
-            nfcAdapter.enableReaderMode(
-                    getActivity(),
-                    this,
-                    NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
-                    options);
+            startNfc2();
             callbackContext.success();
         }  else if (action.equals(REMOVE_DEFAULT_TAG)) {
-            nfcAdapter.disableReaderMode(getActivity());
+            stopNfc2();
             callbackContext.success();
         }
 
@@ -876,10 +870,74 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
 
     }
 
+
+    private void startNfc2() {
+        NfcAdapter nfcAdapter = NfcAdapter.getDefaultAdapter(getActivity());
+        Bundle options = new Bundle();
+        options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 10000); //10 seconds
+        nfcAdapter.enableReaderMode(
+                getActivity(),
+                this,
+                NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_NFC_B | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+                options);
+    }
+
+    private void stopNfc2() {
+        NfcAdapter nfcAdapter = NfcAdapter.getDefaultAdapter(getActivity());
+        nfcAdapter.disableReaderMode(getActivity());
+    }
+
+    /*
+    @Override
+    public void onPause(boolean multitasking) {
+        super.onPause(multitasking);
+        stopNfc2();
+    }
+
+    @Override
+    public void onResume(boolean multitasking) {
+        super.onResume(multitasking);
+        startNfc2();
+    }
+    */
+
+
     private static final String AUTH_CERT_ALIAS = "CertAutenticacion"; //$NON-NLS-1$
+
+    enum TagEventMode {
+        FOUND, READ, ERROR
+    }
+    private void SendTagEvent(JSONObject json, TagEventMode mode){
+        final JSONObject eventjson = json;
+        try{
+            switch (mode){
+                case FOUND:
+                    eventjson.put("mode", "found");
+                    break;
+                case READ:
+                    eventjson.put("mode", "read");
+                    break;
+                case ERROR:
+                    eventjson.put("mode", "error");
+                    break;
+            }
+
+        }catch (Exception e){}
+        webView.getView().post(new Runnable() {
+            @Override
+            public void run() {
+                String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, eventjson);
+                webView.loadUrl("javascript:" + command);
+            }
+        });
+    }
 
     @Override
     public void onTagDiscovered(Tag tag) {
+
+        final JSONObject eventjson = new JSONObject();
+        SendTagEvent(eventjson, TagEventMode.FOUND);
+
         System.setProperty("es.gob.jmulticard.fastmode", "true");
 
         CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
@@ -979,32 +1037,18 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
                 json.put("signature", "data:image/png;base64," + encoded);
             }
 
-            webView.getView().post(new Runnable() {
-                @Override
-                public void run() {
-
-                    String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, json);
-                    webView.loadUrl("javascript:" + command);
-                }
-            });
+            SendTagEvent(json, TagEventMode.READ);
 
 
         } catch (Exception e) {
-
             final JSONObject ejson = new JSONObject();
             try{
                 ejson.put("error", "Error al leer los datos de la tarjeta");
             }catch (Exception se){}
+            SendTagEvent(ejson, TagEventMode.ERROR);
 
-            webView.getView().post(new Runnable() {
-                @Override
-                public void run() {
-
-                    String command = MessageFormat.format(javaScriptEventTemplate, TAG_DEFAULT, ejson);
-                    webView.loadUrl("javascript:" + command);
-                }
-            });
-
+        } finally {
+            stopNfc2();
         }
 
 
