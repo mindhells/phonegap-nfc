@@ -412,6 +412,18 @@ var ndef = {
 // nfc provides javascript wrappers to the native phonegap implementation
 var nfc = {
 
+    addCan: function(number, win, fail){
+        cordova.exec(win, fail, 'NfcPlugin', 'addCan', [number]);
+    },
+
+    deleteCan: function(number, win, fail){
+        cordova.exec(win, fail, 'NfcPlugin', 'deleteCan', [number]);
+    },
+
+    getCans: function(win, fail){
+        cordova.exec(win, fail, 'NfcPlugin', 'getCans', []);
+    },
+
     initialize: function(win, fail){
         cordova.exec(win, fail, "NfcPlugin", "init", []);
     },

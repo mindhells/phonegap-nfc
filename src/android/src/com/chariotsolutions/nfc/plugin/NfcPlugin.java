@@ -3,6 +3,7 @@ package com.chariotsolutions.nfc.plugin;
 import java.io.IOException;
 import java.security.Key;
 import java.security.KeyStore;
+import java.security.Provider;
 import java.security.cert.Certificate;
 import java.text.MessageFormat;
 import java.util.ArrayList;
@@ -36,8 +37,16 @@ import android.os.Parcelable;
 import android.util.Log;
 
 
+import es.gob.jmulticard.jse.provider.MrtdKeyStoreImpl;
+
 import java.security.KeyStoreSpi;
 import java.security.Security;
+import java.util.Vector;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+
 import de.tsenger.androsmex.data.CANSpecDO;
 import de.tsenger.androsmex.data.CANSpecDOStore;
 import de.tsenger.androsmex.mrtd.DG11;
@@ -54,6 +63,7 @@ import es.gob.jmulticard.jse.provider.MrtdKeyStoreImpl;
 import es.gob.jmulticard.jse.provider.MrtdPrivateKey;
 import es.gob.jmulticard.jse.smartcardio.SmartCardMRTDConnection;
 import es.gob.jmulticard.ui.passwordcallback.DNIeDialogManager;
+import es.inteco.labs.net.DNIeCaCertsManager;
 
 public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCompleteCallback, NfcAdapter.ReaderCallback {
     private static final String REGISTER_MIME_TYPE = "registerMimeType";
@@ -73,6 +83,10 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
     private static final String ENABLED = "enabled";
     private static final String INIT = "init";
     private static final String SHOW_SETTINGS = "showSettings";
+
+    private static final String GET_CANS = "getCans";
+    private static final String ADD_CAN = "addCan";
+    private static final String DELETE_CAN = "deleteCan";
 
     private static final String NDEF = "ndef";
     private static final String NDEF_MIME = "ndef-mime";
@@ -124,7 +138,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
 
         if (action.equals(REGISTER_DEFAULT_TAG)) {
             Bundle options = new Bundle();
-            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 35000);
+            options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 600000); //10 minutes
             nfcAdapter.enableReaderMode(
                     getActivity(),
                     this,
@@ -135,6 +149,34 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             nfcAdapter.disableReaderMode(getActivity());
             callbackContext.success();
         }
+
+        if (action.equals(GET_CANS)){
+            CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
+            Vector<CANSpecDO> cans = cansDO.getAll();
+            JSONArray result = new JSONArray();
+            for (CANSpecDO can: cans){
+                JSONObject jcan = new JSONObject();
+                jcan.put("number", can.getCanNumber());
+                jcan.put("name", can.getUserName());
+                jcan.put("id", can.getUserNif());
+                result.put(jcan);
+            }
+            callbackContext.success(result);
+        } else if (action.equals(ADD_CAN)){
+            String newCode = data.getString(0);
+            CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
+            CANSpecDO newCan = new CANSpecDO(newCode, "", "");
+            cansDO.save(newCan);
+            callbackContext.success();
+        } else if (action.equals(DELETE_CAN)) {
+            String newCode = data.getString(0);
+            CANSpecDOStore cansDO = new CANSpecDOStore(getActivity());
+            CANSpecDO newCan = new CANSpecDO(newCode, "", "");
+            cansDO.delete(newCan);
+            callbackContext.success();
+        }
+
+
 
         /*
         createPendingIntent();
@@ -753,6 +795,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         return false;
     }
 
+    /*
     @Override
     public void onPause(boolean multitasking) {
         Log.d(TAG, "onPause " + getIntent());
@@ -778,6 +821,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         savedIntent = intent;
         parseMessage();
     }
+    */
 
     private Activity getActivity() {
         return this.cordova.getActivity();
@@ -830,6 +874,8 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
         p.setProviderCan(canDnie.getCanNumber());
         Security.insertProviderAt(p, 1);
 
+        Provider[] prov = Security.getProviders();
+
         String certSubject;
 
         //KeyStoreSpi ksSpi = new MrtdKeyStoreImpl();
@@ -839,9 +885,16 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
 
             KeyStore m_ksUserDNIe = KeyStore.getInstance("MRTD");
             m_ksUserDNIe.load(null, null);
-            certSubject = ((FakeX509Certificate) m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS)).getSubjectDN().toString();
-            MrtdPrivateKey key = (MrtdPrivateKey) m_ksUserDNIe.getKey(AUTH_CERT_ALIAS, "73547354".toCharArray());
-            byte[] enckey = key.getEncoded();
+            //certSubject = ((FakeX509Certificate) m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS)).getSubjectDN().toString();
+            //MrtdPrivateKey key = (MrtdPrivateKey) m_ksUserDNIe.getKey(AUTH_CERT_ALIAS, "73547354".toCharArray());
+            //byte[] enckey = key.getEncoded();
+
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance("X509");
+            kmf.init(m_ksUserDNIe,"73547354".toCharArray());
+            KeyManager[] keyManagers = kmf.getKeyManagers();
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(keyManagers, null, null);
+
             //Certificate cert = m_ksUserDNIe.getCertificate(AUTH_CERT_ALIAS);
             //byte[] encoded = cert.getEncoded();
           /*
@@ -865,8 +918,6 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
                 }
 
             }
-
-
         }
 
 
