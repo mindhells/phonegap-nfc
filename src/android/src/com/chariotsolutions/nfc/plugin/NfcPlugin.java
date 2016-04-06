@@ -156,7 +156,7 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
             }
             if (selectedCan == null)
                 selectedCan = new CANSpecDO(newCode, "", "");
-            startNfc2();
+            startNfc2(data.getInt(1));
             callbackContext.success();
         }  else if (action.equals(REMOVE_DEFAULT_TAG)) {
             stopNfc2();
@@ -871,10 +871,10 @@ public class NfcPlugin extends CordovaPlugin implements NfcAdapter.OnNdefPushCom
     }
 
 
-    private void startNfc2() {
+    private void startNfc2(int delay) {
         NfcAdapter nfcAdapter = NfcAdapter.getDefaultAdapter(getActivity());
         Bundle options = new Bundle();
-        options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, 10000); //10 seconds
+        options.putInt(NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY, delay); //10 seconds
         nfcAdapter.enableReaderMode(
                 getActivity(),
                 this,
